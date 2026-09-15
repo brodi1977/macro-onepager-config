@@ -305,7 +305,7 @@ function b64decode(str) { return decodeURIComponent(escape(atob(str))); }
 async function loadTemplatesFile() {
   setStatus("load-status", "טוען תבניות...", "loading");
   try {
-    const res = await ghFetch(`${API_BASE}/contents/${TEMPLATES_PATH}?ref=${BRANCH}`);
+    const res = await ghFetch(`${API_BASE}/contents/${TEMPLATES_PATH}?ref=${BRANCH}`, { cache: "no-store" });
     if (res.status === 404) {
       templatesFile = JSON.parse(JSON.stringify(DEFAULT_TEMPLATES_FILE));
       currentSha = null;
@@ -328,30 +328,37 @@ async function loadTemplatesFile() {
 }
 
 async function persistTemplatesFile(commitMessage) {
-  // מרעננים את ה-sha ממש לפני השמירה (לא סומכים על מה שנטען בעבר - יכול להיות
-  // מיושן, למשל אם המשתמש הדביק טוקן אחרי הטעינה הראשונית) - מונע בדיוק את
-  // השגיאה "sha wasn't supplied" כשהקובץ כבר קיים בריפו.
-  const checkRes = await ghFetch(`${API_BASE}/contents/${TEMPLATES_PATH}?ref=${BRANCH}`);
-  if (checkRes.status === 404) {
-    currentSha = null;
-  } else if (checkRes.ok) {
-    currentSha = (await checkRes.json()).sha;
-  }
+  // מרעננים את ה-sha ממש לפני השמירה בכל ניסיון (לא סומכים על מה שנטען בעבר - יכול
+  // להיות מיושן, למשל בגלל HTTP cache של הדפדפן על אותו URL, או שמירה קודמת
+  // באותו טעינת-עמוד) - ואם בכל זאת מתקבלת התנגשות (409/422, sha לא תואם), מנסים
+  // שוב פעם אחת נוספת עם ה-sha הכי עדכני.
+  let lastError = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const checkRes = await ghFetch(`${API_BASE}/contents/${TEMPLATES_PATH}?ref=${BRANCH}`, { cache: "no-store" });
+    if (checkRes.status === 404) {
+      currentSha = null;
+    } else if (checkRes.ok) {
+      currentSha = (await checkRes.json()).sha;
+    }
 
-  const content = b64encode(JSON.stringify(templatesFile, null, 2));
-  const body = { message: commitMessage, content, branch: BRANCH };
-  if (currentSha) body.sha = currentSha;
-  const res = await ghFetch(`${API_BASE}/contents/${TEMPLATES_PATH}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
+    const content = b64encode(JSON.stringify(templatesFile, null, 2));
+    const body = { message: commitMessage, content, branch: BRANCH };
+    if (currentSha) body.sha = currentSha;
+    const res = await ghFetch(`${API_BASE}/contents/${TEMPLATES_PATH}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      currentSha = data.content.sha;
+      return;
+    }
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `שגיאת GitHub API (${res.status})`);
+    lastError = new Error(err.message || `שגיאת GitHub API (${res.status})`);
+    if (!/does not match|sha/i.test(lastError.message)) break; // שגיאה אחרת - לא מנסים שוב
   }
-  const data = await res.json();
-  currentSha = data.content.sha;
+  throw lastError;
 }
 
 async function saveTemplate() {
