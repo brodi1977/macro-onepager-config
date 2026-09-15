@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>בניית דוח יומי</title>
+<style>
+  :root {
+    --primary: #1d4e89;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e5e9f0;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --success: #16a34a;
+    --error: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 60px;
+  }
+  .container { max-width: 640px; margin: 0 auto; }
+  h1 { color: var(--primary); font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+  }
+  .card h2 { font-size: 15px; color: var(--primary); margin: 0 0 10px; }
+  .card p.hint { color: var(--muted); font-size: 12px; margin: 4px 0 12px; line-height: 1.6; }
+  .card p.hint a { color: var(--primary); }
+  input[type="password"], input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .token-row { display: flex; gap: 8px; align-items: center; }
+  .token-row input { flex: 1; }
+
+  ul.sections { list-style: none; margin: 0; padding: 0; }
+  li.section-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  li.section-row:last-child { border-bottom: none; }
+  li.section-row.disabled { opacity: 0.45; }
+  li.section-row .label { flex: 1; font-size: 14px; }
+  li.section-row .order-num {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--primary); color: white;
+    font-size: 11px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  li.section-row.disabled .order-num { background: #cbd5e1; }
+  .arrow-btn {
+    border: 1px solid var(--border);
+    background: white;
+    border-radius: 6px;
+    width: 28px; height: 28px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--primary);
+  }
+  .arrow-btn:disabled { opacity: 0.3; cursor: default; }
+  input[type="checkbox"] { width: 17px; height: 17px; cursor: pointer; }
+
+  button.action {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  button.action.primary { background: var(--primary); color: white; }
+  button.action.secondary { background: #f1f5f9; color: var(--primary); border: 1px solid var(--border); }
+  button.action:disabled { opacity: 0.5; cursor: default; }
+
+  .status { font-size: 12.5px; margin-top: 8px; min-height: 16px; }
+  .status.success { color: var(--success); }
+  .status.error { color: var(--error); }
+  .status.loading { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>בניית דוח יומי</h1>
+  <p class="subtitle">בחירת הנושאים שיופיעו בדוח היומי (macro-onepager) והסדר שלהם.</p>
+
+  <div class="card">
+    <h2>GitHub Token</h2>
+    <p class="hint">
+      נדרש Fine-grained Personal Access Token עם הרשאות <b>Contents: Read and write</b> ו-<b>Actions: Read and write</b>
+      על הריפו <code>brodi1977/macro-onepager</code> בלבד. נוצר פעם אחת ב-
+      <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">GitHub Settings</a>
+      ונשמר רק בדפדפן הזה (localStorage) - לעולם לא נשלח לשום מקום חוץ מ-api.github.com ישירות.
+    </p>
+    <div class="token-row">
+      <input type="password" id="token-input" placeholder="github_pat_..." />
+      <button class="arrow-btn" id="token-toggle" title="הצג/הסתר" style="width:auto;padding:0 10px;">👁</button>
+    </div>
+    <div class="status" id="token-status"></div>
+  </div>
+
+  <div class="card">
+    <h2>נושאי הדוח (גררו את הסדר בעזרת החצים)</h2>
+    <ul class="sections" id="sections-list"></ul>
+    <div class="status" id="load-status"></div>
+  </div>
+
+  <div class="card">
+    <button class="action secondary" id="save-default-btn">💾 שמור כברירת מחדל (הריצה היומית האוטומטית)</button>
+    <div class="status" id="save-status"></div>
+  </div>
+
+  <div class="card">
+    <button class="action primary" id="generate-now-btn">⚡ צור דוח עכשיו (חד-פעמי, לא משנה את ברירת המחדל)</button>
+    <div class="status" id="generate-status"></div>
+  </div>
+</div>
+
+<script>
+const OWNER = "brodi1977";
+const REPO = "macro-onepager";
+const BRANCH = "master";
+const CONFIG_PATH = "config/report_config.json";
+const WORKFLOW_FILE = "daily_brief.yml";
+const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}`;
+
+const SECTION_LABELS = {
+  rates_and_yields: "מקרו ותשואות אג\"ח ממשלתי (ריבית בי\"ל/פד, FedWatch, תשואות)",
+  equities: "שוק המניות",
+  events: "אירועים כלכליים קרובים",
+  bond_yield_curve: "עקום תשואות ממשלתיות ואינפלציה נגזרת",
+  bond_full_table: "נתונים מחושבים מלאים (טבלת אינטרפולציה)",
+  bond_history_compare: "התפתחות עקומים לאורך זמן",
+  bond_appendix: "נספח - רשימת אגרות חוב ממשלתיות",
+};
+const DEFAULT_SECTIONS = [
+  "rates_and_yields", "equities", "events",
+  "bond_yield_curve", "bond_full_table", "bond_history_compare", "bond_appendix",
+];
+const ALL_KEYS = Object.keys(SECTION_LABELS);
+
+let state = DEFAULT_SECTIONS.map(key => ({ key, enabled: true }));
+let currentSha = null;
+
+function getToken() { return localStorage.getItem("gh_token") || ""; }
+function setStatus(id, text, kind) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = "status" + (kind ? " " + kind : "");
+}
+
+function renderList() {
+  const ul = document.getElementById("sections-list");
+  ul.innerHTML = "";
+  state.forEach((item, idx) => {
+    const li = document.createElement("li");
+    li.className = "section-row" + (item.enabled ? "" : " disabled");
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = item.enabled;
+    checkbox.onchange = () => { item.enabled = checkbox.checked; renderList(); };
+
+    const orderNum = document.createElement("div");
+    orderNum.className = "order-num";
+    const enabledIdx = state.filter(s => s.enabled).indexOf(item);
+    orderNum.textContent = item.enabled ? (enabledIdx + 1) : "–";
+
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = SECTION_LABELS[item.key] || item.key;
+
+    const upBtn = document.createElement("button");
+    upBtn.className = "arrow-btn";
+    upBtn.textContent = "↑";
+    upBtn.disabled = idx === 0;
+    upBtn.onclick = () => { [state[idx-1], state[idx]] = [state[idx], state[idx-1]]; renderList(); };
+
+    const downBtn = document.createElement("button");
+    downBtn.className = "arrow-btn";
+    downBtn.textContent = "↓";
+    downBtn.disabled = idx === state.length - 1;
+    downBtn.onclick = () => { [state[idx+1], state[idx]] = [state[idx], state[idx+1]]; renderList(); };
+
+    li.append(checkbox, orderNum, label, upBtn, downBtn);
+    ul.appendChild(li);
+  });
+}
+
+function currentSectionsPayload() {
+  return state.filter(s => s.enabled).map(s => s.key);
+}
+
+async function ghFetch(path, options = {}) {
+  const token = getToken();
+  if (!token) throw new Error("לא הוגדר GitHub Token");
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Accept": "application/vnd.github+json",
+      ...(options.headers || {}),
+    },
+  });
+  return res;
+}
+
+async function loadCurrentConfig() {
+  setStatus("load-status", "טוען קונפיג נוכחי...", "loading");
+  try {
+    const res = await ghFetch(`${API_BASE}/contents/${CONFIG_PATH}?ref=${BRANCH}`);
+    if (res.status === 404) {
+      setStatus("load-status", "אין עדיין קונפיג שמור - מוצגת ברירת המחדל.", "");
+      state = DEFAULT_SECTIONS.map(key => ({ key, enabled: true }));
+      renderList();
+      return;
+    }
+    if (!res.ok) throw new Error(`שגיאת GitHub API (${res.status})`);
+    const data = await res.json();
+    currentSha = data.sha;
+    const decoded = decodeURIComponent(escape(atob(data.content)));
+    const parsed = JSON.parse(decoded);
+    const savedKeys = parsed.sections || [];
+    const enabledSet = new Set(savedKeys);
+    const ordered = savedKeys.filter(k => ALL_KEYS.includes(k)).map(k => ({ key: k, enabled: true }));
+    const missing = ALL_KEYS.filter(k => !enabledSet.has(k)).map(k => ({ key: k, enabled: false }));
+    state = [...ordered, ...missing];
+    renderList();
+    setStatus("load-status", "נטען קונפיג שמור.", "success");
+  } catch (e) {
+    setStatus("load-status", "שגיאה בטעינה: " + e.message + " (מוצגת ברירת המחדל)", "error");
+    state = DEFAULT_SECTIONS.map(key => ({ key, enabled: true }));
+    renderList();
+  }
+}
+
+async function saveAsDefault() {
+  const btn = document.getElementById("save-default-btn");
+  btn.disabled = true;
+  setStatus("save-status", "שומר...", "loading");
+  try {
+    const sections = currentSectionsPayload();
+    if (sections.length === 0) throw new Error("לא נבחר אף נושא");
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify({ sections }, null, 2))));
+    const body = {
+      message: "Update report_config.json via web UI",
+      content,
+      branch: BRANCH,
+    };
+    if (currentSha) body.sha = currentSha;
+    const res = await ghFetch(`${API_BASE}/contents/${CONFIG_PATH}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `שגיאת GitHub API (${res.status})`);
+    }
+    const data = await res.json();
+    currentSha = data.content.sha;
+    setStatus("save-status", "✓ נשמר בהצלחה כברירת המחדל.", "success");
+  } catch (e) {
+    setStatus("save-status", "שגיאה: " + e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function generateNow() {
+  const btn = document.getElementById("generate-now-btn");
+  btn.disabled = true;
+  setStatus("generate-status", "מפעיל ריצה...", "loading");
+  try {
+    const sections = currentSectionsPayload();
+    if (sections.length === 0) throw new Error("לא נבחר אף נושא");
+    const res = await ghFetch(`${API_BASE}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ref: BRANCH,
+        inputs: { config: JSON.stringify({ sections }) },
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `שגיאת GitHub API (${res.status})`);
+    }
+    setStatus("generate-status", "✓ הריצה הופעלה! עקבו אחריה בלשונית Actions בריפו.", "success");
+  } catch (e) {
+    setStatus("generate-status", "שגיאה: " + e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("token-input").value = getToken();
+document.getElementById("token-input").addEventListener("input", (e) => {
+  localStorage.setItem("gh_token", e.target.value.trim());
+  setStatus("token-status", "נשמר בדפדפן.", "success");
+});
+document.getElementById("token-toggle").onclick = () => {
+  const input = document.getElementById("token-input");
+  input.type = input.type === "password" ? "text" : "password";
+};
+document.getElementById("save-default-btn").onclick = saveAsDefault;
+document.getElementById("generate-now-btn").onclick = generateNow;
+
+renderList();
+if (getToken()) {
+  loadCurrentConfig();
+} else {
+  setStatus("load-status", "הזינו GitHub Token למעלה כדי לטעון את הקונפיג השמור.", "");
+}
+</script>
+</body>
+</html>
