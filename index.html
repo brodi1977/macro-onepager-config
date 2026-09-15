@@ -14,6 +14,7 @@
     --muted: #6b7280;
     --success: #16a34a;
     --error: #dc2626;
+    --gold: #b45309;
   }
   * { box-sizing: border-box; }
   body {
@@ -23,7 +24,7 @@
     color: var(--text);
     padding: 24px 16px 60px;
   }
-  .container { max-width: 640px; margin: 0 auto; }
+  .container { max-width: 680px; margin: 0 auto; }
   h1 { color: var(--primary); font-size: 22px; margin: 0 0 4px; }
   .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
   .card {
@@ -46,6 +47,32 @@
   }
   .token-row { display: flex; gap: 8px; align-items: center; }
   .token-row input { flex: 1; }
+
+  /* רשימת תבניות */
+  .template-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+  .template-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    background: white;
+  }
+  .template-pill.active { border-color: var(--primary); background: #eef4fb; color: var(--primary); font-weight: 600; }
+  .template-pill .star { color: var(--gold); }
+  .new-template-btn {
+    padding: 6px 12px;
+    border: 1.5px dashed var(--border);
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    background: white;
+    color: var(--muted);
+  }
+
+  .name-row { margin: 14px 0 10px; }
+  .name-row label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
 
   ul.sections { list-style: none; margin: 0; padding: 0; }
   li.section-row {
@@ -77,19 +104,21 @@
   .arrow-btn:disabled { opacity: 0.3; cursor: default; }
   input[type="checkbox"] { width: 17px; height: 17px; cursor: pointer; }
 
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
   button.action {
-    display: block;
-    width: 100%;
-    padding: 10px;
+    padding: 10px 14px;
     border: none;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 600;
     cursor: pointer;
-    margin-top: 8px;
+    flex: 1;
+    min-width: 140px;
   }
   button.action.primary { background: var(--primary); color: white; }
   button.action.secondary { background: #f1f5f9; color: var(--primary); border: 1px solid var(--border); }
+  button.action.gold { background: #fffbeb; color: var(--gold); border: 1px solid #fde68a; }
+  button.action.danger { background: #fef2f2; color: var(--error); border: 1px solid #fecaca; }
   button.action:disabled { opacity: 0.5; cursor: default; }
 
   .status { font-size: 12.5px; margin-top: 8px; min-height: 16px; }
@@ -101,7 +130,7 @@
 <body>
 <div class="container">
   <h1>בניית דוח יומי</h1>
-  <p class="subtitle">בחירת הנושאים שיופיעו בדוח היומי (macro-onepager) והסדר שלהם.</p>
+  <p class="subtitle">ניהול תבניות דוח (אילו נושאים ובאיזה סדר) - אחת מהן היא "התבנית היומית" (רצה אוטומטית כל בוקר); מכל תבנית אפשר גם ליצור דוח חד-פעמי בלחיצה.</p>
 
   <div class="card">
     <h2>GitHub Token</h2>
@@ -119,18 +148,30 @@
   </div>
 
   <div class="card">
-    <h2>נושאי הדוח (גררו את הסדר בעזרת החצים)</h2>
-    <ul class="sections" id="sections-list"></ul>
+    <h2>תבניות שמורות</h2>
+    <div class="template-pills" id="template-pills"></div>
+    <button class="new-template-btn" id="new-template-btn">+ תבנית חדשה</button>
     <div class="status" id="load-status"></div>
   </div>
 
   <div class="card">
-    <button class="action secondary" id="save-default-btn">💾 שמור כברירת מחדל (הריצה היומית האוטומטית)</button>
-    <div class="status" id="save-status"></div>
-  </div>
+    <h2>עריכת תבנית</h2>
+    <div class="name-row">
+      <label>שם התבנית</label>
+      <input type="text" id="template-name" placeholder="למשל: דוח מלא, רק שוק המניות..." />
+    </div>
+    <ul class="sections" id="sections-list"></ul>
 
-  <div class="card">
-    <button class="action primary" id="generate-now-btn">⚡ צור דוח עכשיו (חד-פעמי, לא משנה את ברירת המחדל)</button>
+    <div class="btn-row">
+      <button class="action secondary" id="save-template-btn">💾 שמור תבנית</button>
+      <button class="action gold" id="set-daily-btn">⭐ הפוך לתבנית היומית</button>
+      <button class="action danger" id="delete-template-btn">🗑 מחק תבנית</button>
+    </div>
+    <div class="status" id="save-status"></div>
+
+    <div class="btn-row">
+      <button class="action primary" id="generate-now-btn">⚡ צור דוח עכשיו מהתבנית הזו</button>
+    </div>
     <div class="status" id="generate-status"></div>
   </div>
 </div>
@@ -139,7 +180,7 @@
 const OWNER = "brodi1977";
 const REPO = "macro-onepager";
 const BRANCH = "master";
-const CONFIG_PATH = "config/report_config.json";
+const TEMPLATES_PATH = "config/report_templates.json";
 const WORKFLOW_FILE = "daily_brief.yml";
 const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}`;
 
@@ -152,14 +193,18 @@ const SECTION_LABELS = {
   bond_history_compare: "התפתחות עקומים לאורך זמן",
   bond_appendix: "נספח - רשימת אגרות חוב ממשלתיות",
 };
-const DEFAULT_SECTIONS = [
-  "rates_and_yields", "equities", "events",
-  "bond_yield_curve", "bond_full_table", "bond_history_compare", "bond_appendix",
-];
 const ALL_KEYS = Object.keys(SECTION_LABELS);
+const DEFAULT_TEMPLATES_FILE = {
+  daily_template_id: "daily",
+  templates: [
+    { id: "daily", name: "דוח יומי (ברירת מחדל)", sections: [...ALL_KEYS] },
+  ],
+};
 
-let state = DEFAULT_SECTIONS.map(key => ({ key, enabled: true }));
-let currentSha = null;
+let templatesFile = null;   // { daily_template_id, templates: [{id,name,sections}] }
+let currentSha = null;      // sha של report_templates.json בריפו (לצורך PUT)
+let activeTemplateId = null;
+let editorRows = [];        // [{key, enabled}] - מצב העריכה הנוכחי (לא בהכרח נשמר עדיין)
 
 function getToken() { return localStorage.getItem("gh_token") || ""; }
 function setStatus(id, text, kind) {
@@ -168,21 +213,51 @@ function setStatus(id, text, kind) {
   el.className = "status" + (kind ? " " + kind : "");
 }
 
-function renderList() {
+function findTemplate(id) {
+  return templatesFile.templates.find(t => t.id === id) || null;
+}
+
+function loadTemplateIntoEditor(id) {
+  const tmpl = findTemplate(id);
+  if (!tmpl) return;
+  activeTemplateId = id;
+  document.getElementById("template-name").value = tmpl.name;
+  const enabledSet = new Set(tmpl.sections);
+  const ordered = tmpl.sections.filter(k => ALL_KEYS.includes(k)).map(k => ({ key: k, enabled: true }));
+  const missing = ALL_KEYS.filter(k => !enabledSet.has(k)).map(k => ({ key: k, enabled: false }));
+  editorRows = [...ordered, ...missing];
+  renderPills();
+  renderSectionsList();
+}
+
+function renderPills() {
+  const wrap = document.getElementById("template-pills");
+  wrap.innerHTML = "";
+  templatesFile.templates.forEach(t => {
+    const pill = document.createElement("div");
+    pill.className = "template-pill" + (t.id === activeTemplateId ? " active" : "");
+    const isDaily = t.id === templatesFile.daily_template_id;
+    pill.innerHTML = (isDaily ? '<span class="star">⭐</span> ' : '') + t.name;
+    pill.onclick = () => loadTemplateIntoEditor(t.id);
+    wrap.appendChild(pill);
+  });
+}
+
+function renderSectionsList() {
   const ul = document.getElementById("sections-list");
   ul.innerHTML = "";
-  state.forEach((item, idx) => {
+  editorRows.forEach((item, idx) => {
     const li = document.createElement("li");
     li.className = "section-row" + (item.enabled ? "" : " disabled");
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = item.enabled;
-    checkbox.onchange = () => { item.enabled = checkbox.checked; renderList(); };
+    checkbox.onchange = () => { item.enabled = checkbox.checked; renderSectionsList(); };
 
     const orderNum = document.createElement("div");
     orderNum.className = "order-num";
-    const enabledIdx = state.filter(s => s.enabled).indexOf(item);
+    const enabledIdx = editorRows.filter(s => s.enabled).indexOf(item);
     orderNum.textContent = item.enabled ? (enabledIdx + 1) : "–";
 
     const label = document.createElement("div");
@@ -193,13 +268,13 @@ function renderList() {
     upBtn.className = "arrow-btn";
     upBtn.textContent = "↑";
     upBtn.disabled = idx === 0;
-    upBtn.onclick = () => { [state[idx-1], state[idx]] = [state[idx], state[idx-1]]; renderList(); };
+    upBtn.onclick = () => { [editorRows[idx-1], editorRows[idx]] = [editorRows[idx], editorRows[idx-1]]; renderSectionsList(); };
 
     const downBtn = document.createElement("button");
     downBtn.className = "arrow-btn";
     downBtn.textContent = "↓";
-    downBtn.disabled = idx === state.length - 1;
-    downBtn.onclick = () => { [state[idx+1], state[idx]] = [state[idx], state[idx+1]]; renderList(); };
+    downBtn.disabled = idx === editorRows.length - 1;
+    downBtn.onclick = () => { [editorRows[idx+1], editorRows[idx]] = [editorRows[idx], editorRows[idx+1]]; renderSectionsList(); };
 
     li.append(checkbox, orderNum, label, upBtn, downBtn);
     ul.appendChild(li);
@@ -207,13 +282,13 @@ function renderList() {
 }
 
 function currentSectionsPayload() {
-  return state.filter(s => s.enabled).map(s => s.key);
+  return editorRows.filter(s => s.enabled).map(s => s.key);
 }
 
 async function ghFetch(path, options = {}) {
   const token = getToken();
   if (!token) throw new Error("לא הוגדר GitHub Token");
-  const res = await fetch(path, {
+  return fetch(path, {
     ...options,
     headers: {
       "Authorization": `Bearer ${token}`,
@@ -221,64 +296,123 @@ async function ghFetch(path, options = {}) {
       ...(options.headers || {}),
     },
   });
-  return res;
 }
 
-async function loadCurrentConfig() {
-  setStatus("load-status", "טוען קונפיג נוכחי...", "loading");
+function b64encode(str) { return btoa(unescape(encodeURIComponent(str))); }
+function b64decode(str) { return decodeURIComponent(escape(atob(str))); }
+
+async function loadTemplatesFile() {
+  setStatus("load-status", "טוען תבניות...", "loading");
   try {
-    const res = await ghFetch(`${API_BASE}/contents/${CONFIG_PATH}?ref=${BRANCH}`);
+    const res = await ghFetch(`${API_BASE}/contents/${TEMPLATES_PATH}?ref=${BRANCH}`);
     if (res.status === 404) {
-      setStatus("load-status", "אין עדיין קונפיג שמור - מוצגת ברירת המחדל.", "");
-      state = DEFAULT_SECTIONS.map(key => ({ key, enabled: true }));
-      renderList();
-      return;
+      templatesFile = JSON.parse(JSON.stringify(DEFAULT_TEMPLATES_FILE));
+      currentSha = null;
+      setStatus("load-status", "אין עדיין קובץ תבניות שמור - מוצגת ברירת מחדל (עוד לא נשמרה בריפו).", "");
+    } else if (!res.ok) {
+      throw new Error(`שגיאת GitHub API (${res.status})`);
+    } else {
+      const data = await res.json();
+      currentSha = data.sha;
+      templatesFile = JSON.parse(b64decode(data.content));
+      setStatus("load-status", "נטענו התבניות השמורות.", "success");
     }
-    if (!res.ok) throw new Error(`שגיאת GitHub API (${res.status})`);
-    const data = await res.json();
-    currentSha = data.sha;
-    const decoded = decodeURIComponent(escape(atob(data.content)));
-    const parsed = JSON.parse(decoded);
-    const savedKeys = parsed.sections || [];
-    const enabledSet = new Set(savedKeys);
-    const ordered = savedKeys.filter(k => ALL_KEYS.includes(k)).map(k => ({ key: k, enabled: true }));
-    const missing = ALL_KEYS.filter(k => !enabledSet.has(k)).map(k => ({ key: k, enabled: false }));
-    state = [...ordered, ...missing];
-    renderList();
-    setStatus("load-status", "נטען קונפיג שמור.", "success");
   } catch (e) {
-    setStatus("load-status", "שגיאה בטעינה: " + e.message + " (מוצגת ברירת המחדל)", "error");
-    state = DEFAULT_SECTIONS.map(key => ({ key, enabled: true }));
-    renderList();
+    templatesFile = JSON.parse(JSON.stringify(DEFAULT_TEMPLATES_FILE));
+    currentSha = null;
+    setStatus("load-status", "שגיאה בטעינה: " + e.message + " (מוצגת ברירת מחדל)", "error");
   }
+  renderPills();
+  loadTemplateIntoEditor(templatesFile.daily_template_id || templatesFile.templates[0].id);
 }
 
-async function saveAsDefault() {
-  const btn = document.getElementById("save-default-btn");
+async function persistTemplatesFile(commitMessage) {
+  const content = b64encode(JSON.stringify(templatesFile, null, 2));
+  const body = { message: commitMessage, content, branch: BRANCH };
+  if (currentSha) body.sha = currentSha;
+  const res = await ghFetch(`${API_BASE}/contents/${TEMPLATES_PATH}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `שגיאת GitHub API (${res.status})`);
+  }
+  const data = await res.json();
+  currentSha = data.content.sha;
+}
+
+async function saveTemplate() {
+  const btn = document.getElementById("save-template-btn");
   btn.disabled = true;
   setStatus("save-status", "שומר...", "loading");
   try {
     const sections = currentSectionsPayload();
     if (sections.length === 0) throw new Error("לא נבחר אף נושא");
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify({ sections }, null, 2))));
-    const body = {
-      message: "Update report_config.json via web UI",
-      content,
-      branch: BRANCH,
-    };
-    if (currentSha) body.sha = currentSha;
-    const res = await ghFetch(`${API_BASE}/contents/${CONFIG_PATH}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `שגיאת GitHub API (${res.status})`);
+    const name = document.getElementById("template-name").value.trim();
+    if (!name) throw new Error("יש להזין שם לתבנית");
+
+    const existing = findTemplate(activeTemplateId);
+    if (existing) {
+      existing.name = name;
+      existing.sections = sections;
+    } else {
+      templatesFile.templates.push({ id: activeTemplateId, name, sections });
     }
-    const data = await res.json();
-    currentSha = data.content.sha;
-    setStatus("save-status", "✓ נשמר בהצלחה כברירת המחדל.", "success");
+    await persistTemplatesFile(`Save template "${name}" via web UI`);
+    renderPills();
+    setStatus("save-status", "✓ התבנית נשמרה.", "success");
+  } catch (e) {
+    setStatus("save-status", "שגיאה: " + e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function setAsDaily() {
+  const btn = document.getElementById("set-daily-btn");
+  btn.disabled = true;
+  setStatus("save-status", "מעדכן...", "loading");
+  try {
+    // קודם שומרים את המצב הנוכחי של התבנית (כדי שהיא לא "תיהפך לברירת מחדל" עם תוכן ישן), ואז מסמנים אותה
+    const sections = currentSectionsPayload();
+    if (sections.length === 0) throw new Error("לא נבחר אף נושא");
+    const name = document.getElementById("template-name").value.trim();
+    if (!name) throw new Error("יש להזין שם לתבנית");
+    const existing = findTemplate(activeTemplateId);
+    if (existing) { existing.name = name; existing.sections = sections; }
+    else { templatesFile.templates.push({ id: activeTemplateId, name, sections }); }
+    templatesFile.daily_template_id = activeTemplateId;
+    await persistTemplatesFile(`Set "${name}" as the daily template via web UI`);
+    renderPills();
+    setStatus("save-status", "✓ נשמרה, וסומנה כתבנית היומית.", "success");
+  } catch (e) {
+    setStatus("save-status", "שגיאה: " + e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteTemplate() {
+  const btn = document.getElementById("delete-template-btn");
+  if (activeTemplateId === templatesFile.daily_template_id) {
+    setStatus("save-status", "לא ניתן למחוק את התבנית היומית הנוכחית - קבעו קודם תבנית אחרת כיומית.", "error");
+    return;
+  }
+  if (templatesFile.templates.length <= 1) {
+    setStatus("save-status", "חייבת להישאר לפחות תבנית אחת.", "error");
+    return;
+  }
+  if (!confirm("למחוק את התבנית הזו?")) return;
+  btn.disabled = true;
+  setStatus("save-status", "מוחק...", "loading");
+  try {
+    templatesFile.templates = templatesFile.templates.filter(t => t.id !== activeTemplateId);
+    await persistTemplatesFile(`Delete template via web UI`);
+    renderPills();
+    loadTemplateIntoEditor(templatesFile.daily_template_id);
+    setStatus("save-status", "✓ נמחקה.", "success");
   } catch (e) {
     setStatus("save-status", "שגיאה: " + e.message, "error");
   } finally {
@@ -305,12 +439,23 @@ async function generateNow() {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `שגיאת GitHub API (${res.status})`);
     }
-    setStatus("generate-status", "✓ הריצה הופעלה! עקבו אחריה בלשונית Actions בריפו.", "success");
+    setStatus("generate-status", "✓ הריצה הופעלה עם התבנית הנוכחית (כפי שמוצגת כרגע, גם אם לא נשמרה)! עקבו אחריה בלשונית Actions בריפו.", "success");
   } catch (e) {
     setStatus("generate-status", "שגיאה: " + e.message, "error");
   } finally {
     btn.disabled = false;
   }
+}
+
+function newTemplate() {
+  const name = prompt("שם לתבנית החדשה:");
+  if (!name) return;
+  activeTemplateId = "tmpl_" + Date.now();
+  document.getElementById("template-name").value = name;
+  editorRows = ALL_KEYS.map(key => ({ key, enabled: true }));
+  renderPills();
+  renderSectionsList();
+  setStatus("save-status", "תבנית חדשה - לחצו \"שמור תבנית\" כדי לשמור אותה בריפו.", "");
 }
 
 document.getElementById("token-input").value = getToken();
@@ -322,14 +467,19 @@ document.getElementById("token-toggle").onclick = () => {
   const input = document.getElementById("token-input");
   input.type = input.type === "password" ? "text" : "password";
 };
-document.getElementById("save-default-btn").onclick = saveAsDefault;
+document.getElementById("new-template-btn").onclick = newTemplate;
+document.getElementById("save-template-btn").onclick = saveTemplate;
+document.getElementById("set-daily-btn").onclick = setAsDaily;
+document.getElementById("delete-template-btn").onclick = deleteTemplate;
 document.getElementById("generate-now-btn").onclick = generateNow;
 
-renderList();
 if (getToken()) {
-  loadCurrentConfig();
+  loadTemplatesFile();
 } else {
-  setStatus("load-status", "הזינו GitHub Token למעלה כדי לטעון את הקונפיג השמור.", "");
+  templatesFile = JSON.parse(JSON.stringify(DEFAULT_TEMPLATES_FILE));
+  renderPills();
+  loadTemplateIntoEditor(templatesFile.daily_template_id);
+  setStatus("load-status", "הזינו GitHub Token למעלה כדי לטעון/לשמור תבניות.", "");
 }
 </script>
 </body>
