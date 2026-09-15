@@ -327,6 +327,16 @@ async function loadTemplatesFile() {
 }
 
 async function persistTemplatesFile(commitMessage) {
+  // מרעננים את ה-sha ממש לפני השמירה (לא סומכים על מה שנטען בעבר - יכול להיות
+  // מיושן, למשל אם המשתמש הדביק טוקן אחרי הטעינה הראשונית) - מונע בדיוק את
+  // השגיאה "sha wasn't supplied" כשהקובץ כבר קיים בריפו.
+  const checkRes = await ghFetch(`${API_BASE}/contents/${TEMPLATES_PATH}?ref=${BRANCH}`);
+  if (checkRes.status === 404) {
+    currentSha = null;
+  } else if (checkRes.ok) {
+    currentSha = (await checkRes.json()).sha;
+  }
+
   const content = b64encode(JSON.stringify(templatesFile, null, 2));
   const body = { message: commitMessage, content, branch: BRANCH };
   if (currentSha) body.sha = currentSha;
@@ -458,10 +468,17 @@ function newTemplate() {
   setStatus("save-status", "תבנית חדשה - לחצו \"שמור תבנית\" כדי לשמור אותה בריפו.", "");
 }
 
+let tokenDebounceTimer = null;
 document.getElementById("token-input").value = getToken();
 document.getElementById("token-input").addEventListener("input", (e) => {
   localStorage.setItem("gh_token", e.target.value.trim());
   setStatus("token-status", "נשמר בדפדפן.", "success");
+  // טוענים מחדש את התבניות בפועל מהריפו ברגע שיש טוקן - כדי שה-sha המקומי לא
+  // יישאר מיושן (למשל אם הטוקן הודבק אחרי טעינת העמוד הראשונית).
+  clearTimeout(tokenDebounceTimer);
+  tokenDebounceTimer = setTimeout(() => {
+    if (getToken()) loadTemplatesFile();
+  }, 500);
 });
 document.getElementById("token-toggle").onclick = () => {
   const input = document.getElementById("token-input");
