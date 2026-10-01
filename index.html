@@ -477,7 +477,7 @@ async function downloadRunPdf(runId) {
   const url = URL.createObjectURL(new Blob([pdfBlob], { type: "application/pdf" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = `onepager_${new Date().toISOString().slice(0, 10)}.pdf`;
+  a.download = "Daily Update.pdf";
   document.body.appendChild(a);
   a.click();
   a.remove();
