@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-07T09:49:45Z",
+ "generated_at": "2026-10-07T09:53:32Z",
  "source": "Bizportal",
  "indices": [
   {
@@ -73,7 +73,7 @@
    "name": "מדד בונד קצר עד שנה",
    "constituents": 143,
    "coverage_pct": 100.0,
-   "ytm": 3.43,
+   "ytm": 3.42,
    "duration": 0.38,
    "spread": 0.41,
    "rating": "AA+",
@@ -392,7 +392,7 @@
    "name": "מדד תל בונד שקלי 100",
    "constituents": 100,
    "coverage_pct": 100.0,
-   "ytm": 4.6,
+   "ytm": 4.61,
    "duration": 3.91,
    "spread": 0.82,
    "rating": "AA-",
@@ -592,7 +592,7 @@
    "coverage_pct": 100.0,
    "ytm": 4.93,
    "duration": 5.65,
-   "spread": 0.94,
+   "spread": 0.95,
    "rating": "AA-",
    "rating_coverage_pct": 100.0
   },
@@ -733,7 +733,7 @@
    "name": "תל גוב-שקלי",
    "constituents": 16,
    "coverage_pct": 100.0,
-   "ytm": 3.9,
+   "ytm": 3.91,
    "duration": 5.95,
    "spread": 0.0,
    "rating": null,
