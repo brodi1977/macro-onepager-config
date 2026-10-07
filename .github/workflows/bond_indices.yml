@@ -1,0 +1,33 @@
+name: Bond indices data
+
+# מחשב את הנתונים לטאב "מדדי אג"ח" בעמוד: אחרי סגירת המסחר בבורסה (א'-ה') ובלחיצה ידנית מ-Actions.
+# התוצאה נשמרת ב-data/bond_indices.json ונקראת ישירות על ידי העמוד (בלי טוקן).
+on:
+  schedule:
+    - cron: '30 15 * * 0-4'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests beautifulsoup4
+      - run: python scripts/build_bond_indices.py
+      - name: Commit the data file if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/bond_indices.json
+          if git diff --cached --quiet; then
+            echo "no change"
+          else
+            git commit -m "Update bond indices data"
+            git push
+          fi

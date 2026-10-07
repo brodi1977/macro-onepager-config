@@ -126,11 +126,50 @@
   .status.success { color: var(--success); }
   .status.error { color: var(--error); }
   .status.loading { color: var(--muted); }
+
+  /* טאבים */
+  .container.wide { max-width: 1020px; }
+  .tabs { display: flex; gap: 6px; margin: 0 0 18px; border-bottom: 2px solid var(--border); }
+  .tab-btn {
+    padding: 9px 16px; border: none; background: none; cursor: pointer;
+    font-size: 14px; font-family: inherit; color: var(--muted); font-weight: 600;
+    border-bottom: 3px solid transparent; margin-bottom: -2px;
+  }
+  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  /* טאב מדדי אג"ח */
+  .bonds-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .bonds-toolbar input[type="text"] { flex: 1; min-width: 180px; }
+  .chip {
+    padding: 5px 12px; border: 1.5px solid var(--border); border-radius: 20px; font-size: 12.5px;
+    background: white; cursor: pointer; font-family: inherit; color: var(--text);
+  }
+  .chip.active { border-color: var(--primary); background: #eef4fb; color: var(--primary); font-weight: 600; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: white; }
+  table.bonds { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.bonds th {
+    background: #f1f5f9; color: #475569; font-weight: 600; font-size: 12px; padding: 9px 10px;
+    text-align: center; cursor: pointer; white-space: nowrap; user-select: none;
+  }
+  table.bonds th:first-child, table.bonds td:first-child { text-align: right; }
+  table.bonds th .arrow { color: var(--primary); margin-right: 3px; font-size: 10px; }
+  table.bonds td { padding: 7px 10px; border-top: 1px solid #eef1f5; text-align: center; white-space: nowrap; }
+  table.bonds td.name { font-weight: 600; white-space: normal; min-width: 200px; }
+  table.bonds tr:hover td { background: #f8fafc; }
+  .na { color: #b0b7c3; }
+  .partial { color: var(--gold); cursor: help; font-size: 11px; }
+  .bonds-meta { font-size: 12px; color: var(--muted); margin: 10px 2px 0; line-height: 1.7; }
 </style>
 </head>
 <body>
-<div class="container">
+<div class="container" id="main-container">
   <h1>בניית דוח יומי</h1>
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-btn-templates" data-tab="templates">תבניות הדוח</button>
+    <button class="tab-btn" id="tab-btn-bonds" data-tab="bonds">מדדי אג"ח - נתונים מחושבים</button>
+  </div>
+
+  <div id="tab-templates">
   <p class="subtitle">ניהול תבניות דוח (אילו נושאים ובאיזה סדר) - אחת מהן היא "התבנית היומית" (רצה אוטומטית כל בוקר); מכל תבנית אפשר גם ליצור דוח חד-פעמי בלחיצה.</p>
 
   <div class="card">
@@ -174,6 +213,25 @@
       <button class="action primary" id="generate-now-btn">⚡ צור דוח עכשיו מהתבנית הזו</button>
     </div>
     <div class="status" id="generate-status"></div>
+  </div>
+  </div><!-- /tab-templates -->
+
+  <div id="tab-bonds" hidden>
+    <p class="subtitle">מח"מ, תשואה לפדיון, דירוג ממוצע ומרווח מאג"ח ממשלתי - לכל אחד ממדדי האג"ח של הבורסה (נתוני ביזפורטל), מחושבים כממוצע משוקלל לפי הרכב המדד.</p>
+    <div class="bonds-toolbar">
+      <input type="text" id="bonds-filter" placeholder="חיפוש לפי שם מדד..." />
+      <button class="chip active" data-group="all">הכול</button>
+      <button class="chip" data-group="corp">תל בונד (קונצרני)</button>
+      <button class="chip" data-group="gov">תל גוב (ממשלתי)</button>
+      <button class="chip" data-group="allbond">All-Bond</button>
+    </div>
+    <div class="table-wrap">
+      <table class="bonds">
+        <thead><tr id="bonds-head"></tr></thead>
+        <tbody id="bonds-body"><tr><td colspan="6" class="na" style="padding:20px">טוען...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="bonds-meta" id="bonds-meta"></div>
   </div>
 </div>
 
@@ -579,6 +637,121 @@ if (getToken()) {
   loadTemplateIntoEditor(templatesFile.daily_template_id);
   setStatus("load-status", "הזינו GitHub Token למעלה כדי לטעון/לשמור תבניות.", "");
 }
+</script>
+<script>
+// ---------- טאבים ----------
+const BONDS_DATA_URL = "https://raw.githubusercontent.com/brodi1977/macro-onepager-config/main/data/bond_indices.json";
+let bondsLoaded = false;
+
+function showTab(name) {
+  document.getElementById("tab-templates").hidden = name !== "templates";
+  document.getElementById("tab-bonds").hidden = name !== "bonds";
+  document.getElementById("main-container").classList.toggle("wide", name === "bonds");
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+  if (name === "bonds" && !bondsLoaded) loadBondIndices();
+}
+document.querySelectorAll(".tab-btn").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ---------- טאב מדדי אג"ח ----------
+const BOND_COLS = [
+  { key: "name", label: "שם המדד", type: "text" },
+  { key: "constituents", label: "ניירות", type: "num" },
+  { key: "ytm", label: "תשואה לפדיון %", type: "num" },
+  { key: "duration", label: 'מח"מ (שנים)', type: "num" },
+  { key: "rating", label: "דירוג ממוצע", type: "rating" },
+  { key: "spread", label: "מרווח ממשלתי %", type: "num" },
+];
+const RATING_SCALE = ["AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+", "BBB", "BBB-", "BB+", "BB", "BB-", "B+", "B", "B-"];
+let bondRows = [], bondSort = { key: "name", dir: 1 }, bondGroup = "all";
+
+function bondGroupOf(name) {
+  if (name.startsWith("תל גוב") || name.startsWith("תל-גוב")) return "gov";
+  if (name.toLowerCase().includes("all-bond")) return "allbond";
+  return "corp";
+}
+
+function escapeHtml(t) {
+  return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+async function loadBondIndices() {
+  const body = document.getElementById("bonds-body");
+  try {
+    const res = await fetch(BONDS_DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    bondRows = (data.indices || []).filter(r => !r.error).map(r => ({ ...r, group: bondGroupOf(r.name) }));
+    bondsLoaded = true;
+    const when = new Date(data.generated_at);
+    document.getElementById("bonds-meta").innerHTML =
+      "עודכן: " + when.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) + " · מקור: ביזפורטל<br>" +
+      'התשואה, המח"מ והמרווח הם ממוצע משוקלל לפי משקלי הניירות באינדקס (התאמה לפי מספר נייר); תשואת אינדקסים צמודים היא ריאלית. ' +
+      'הדירוג הוא ממוצע הדרגות (מעלות/מידרוג) מעוגל לדרגה הקרובה; ⚠ מציין שהדירוג מחושב רק על חלק מהמשקל (ניירות ללא דירוג, בעיקר ממשלתיים, לא נכללו). ' +
+      "לאינדקסי תל גוב אין דירוג.";
+    renderBondTable();
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="6" style="padding:20px;color:var(--error)">טעינת הנתונים נכשלה (' + escapeHtml(e.message) + "). נסו לרענן.</td></tr>";
+  }
+}
+
+function renderBondHead() {
+  const head = document.getElementById("bonds-head");
+  head.innerHTML = "";
+  BOND_COLS.forEach(c => {
+    const th = document.createElement("th");
+    th.innerHTML = c.label + (bondSort.key === c.key ? '<span class="arrow">' + (bondSort.dir > 0 ? "▲" : "▼") + "</span>" : "");
+    th.onclick = () => {
+      bondSort = { key: c.key, dir: bondSort.key === c.key ? -bondSort.dir : (c.type === "text" ? 1 : -1) };
+      renderBondTable();
+    };
+    head.appendChild(th);
+  });
+}
+
+function sortValue(r, col) {
+  const v = r[col.key];
+  if (col.type === "rating") return v == null ? 999 : RATING_SCALE.indexOf(v);
+  if (col.type === "num") return v == null ? -Infinity : v;
+  return String(v);
+}
+
+function renderBondTable() {
+  renderBondHead();
+  const q = document.getElementById("bonds-filter").value.trim().toLowerCase();
+  const col = BOND_COLS.find(c => c.key === bondSort.key);
+  const rows = bondRows
+    .filter(r => (bondGroup === "all" || r.group === bondGroup) && (!q || r.name.toLowerCase().includes(q)))
+    .sort((a, b) => {
+      const x = sortValue(a, col), y = sortValue(b, col);
+      return (x < y ? -1 : x > y ? 1 : 0) * bondSort.dir;
+    });
+  const fmt = (v, d) => v == null ? '<span class="na">N/A</span>' : v.toFixed(d);
+  const body = document.getElementById("bonds-body");
+  body.innerHTML = rows.length ? "" : '<tr><td colspan="6" class="na" style="padding:20px">אין מדדים תואמים</td></tr>';
+  rows.forEach(r => {
+    const partial = r.rating && r.rating_coverage_pct < 99.5
+      ? ' <span class="partial" title="הדירוג מחושב על ' + Math.round(r.rating_coverage_pct) + '% מהמשקל בלבד">⚠</span>' : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td class="name">' + escapeHtml(r.name) + "</td>" +
+      "<td>" + r.constituents + "</td>" +
+      "<td>" + fmt(r.ytm, 2) + "</td>" +
+      "<td>" + fmt(r.duration, 2) + "</td>" +
+      "<td>" + (r.rating ? escapeHtml(r.rating) + partial : '<span class="na">N/A</span>') + "</td>" +
+      "<td>" + fmt(r.spread, 2) + "</td>";
+    body.appendChild(tr);
+  });
+}
+
+document.getElementById("bonds-filter").oninput = renderBondTable;
+document.querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
+  bondGroup = ch.dataset.group;
+  document.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c === ch));
+  renderBondTable();
+});
+
+showTab(location.hash === "#bonds" ? "bonds" : "templates");
 </script>
 </body>
 </html>
